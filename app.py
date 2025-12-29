@@ -47,13 +47,59 @@ limiter = Limiter(
 )
 
 # 1. Configurar Google Gemini (Corrigido para evitar o erro 404)
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+gemini_api_key = os.getenv("GEMINI_API_KEY")
+client = None
+if not gemini_api_key:
+    print("⚠️  WARNING: GEMINI_API_KEY not set")
+else:
+    try:
+        client = genai.Client(api_key=gemini_api_key)
+        print("✅ Gemini client initialized")
+    except Exception as e:
+        print(f"❌ Error initializing Gemini client: {e}")
 
-# 2. Configurar Firebase (Usando o teu ficheiro de configuração)
+# 2. Configurar Firebase (Usando o teu ficheiro de configuração ou variáveis de ambiente)
+db = None
 if not firebase_admin._apps:
-    cred = credentials.Certificate("luna_config.json")
-    firebase_admin.initialize_app(cred)
-db = firestore.client()
+    # Tentar usar arquivo de configuração primeiro
+    firebase_config_path = os.getenv("FIREBASE_CONFIG_PATH", "luna_config.json")
+    if os.path.exists(firebase_config_path):
+        try:
+            cred = credentials.Certificate(firebase_config_path)
+            firebase_admin.initialize_app(cred)
+            db = firestore.client()
+            print("✅ Firebase initialized from config file")
+        except Exception as e:
+            print(f"❌ Error initializing Firebase from file: {e}")
+            # Tentar usar variáveis de ambiente como fallback
+            firebase_creds_json = os.getenv("FIREBASE_CREDENTIALS_JSON")
+            if firebase_creds_json:
+                try:
+                    import json
+                    cred_dict = json.loads(firebase_creds_json)
+                    cred = credentials.Certificate(cred_dict)
+                    firebase_admin.initialize_app(cred)
+                    db = firestore.client()
+                    print("✅ Firebase initialized from environment variable")
+                except Exception as e2:
+                    print(f"❌ Error initializing Firebase from env: {e2}")
+    else:
+        # Tentar usar variáveis de ambiente
+        firebase_creds_json = os.getenv("FIREBASE_CREDENTIALS_JSON")
+        if firebase_creds_json:
+            try:
+                import json
+                cred_dict = json.loads(firebase_creds_json)
+                cred = credentials.Certificate(cred_dict)
+                firebase_admin.initialize_app(cred)
+                db = firestore.client()
+                print("✅ Firebase initialized from environment variable")
+            except Exception as e:
+                print(f"❌ Error initializing Firebase from env: {e}")
+        else:
+            print("⚠️  WARNING: Firebase config file not found and FIREBASE_CREDENTIALS_JSON not set")
+else:
+    db = firestore.client()
 
 # 3. Configurar Stripe
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
@@ -126,6 +172,13 @@ def set_security_headers(response):
 @app.route('/api/v1/chat', methods=['POST'])
 @limiter.limit("10 per minute")  # Rate limit: 10 requests por minuto por IP
 def chat():
+    # Verificar se as dependências estão configuradas
+    if not db:
+        return jsonify({"error": "Database not configured"}), 500
+    
+    if not client or not gemini_api_key:
+        return jsonify({"error": "Gemini API not configured"}), 500
+    
     # Validar Content-Type
     if not request.is_json:
         return jsonify({"error": "Content-Type must be application/json"}), 400
@@ -350,6 +403,9 @@ Luna:"""
 def get_chat_history():
     """Carregar histórico de conversas do utilizador"""
     try:
+        if not db:
+            return jsonify({"error": "Database not configured"}), 500
+        
         user_id = request.args.get('userId')
         persona = request.args.get('persona', 'Luna')
         
@@ -404,6 +460,9 @@ def get_chat_history():
 def create_checkout():
     """Criar sessão de checkout do Stripe"""
     try:
+        if not db:
+            return jsonify({"error": "Database not configured"}), 500
+        
         if not request.is_json:
             return jsonify({"error": "Content-Type must be application/json"}), 400
         
@@ -537,6 +596,9 @@ def stripe_webhook():
 def get_subscription_status():
     """Verificar status da subscrição do utilizador"""
     try:
+        if not db:
+            return jsonify({"error": "Database not configured"}), 500
+        
         user_id = request.args.get('userId')
         
         if not user_id:
@@ -589,6 +651,9 @@ def get_subscription_status():
 def create_portal_session():
     """Criar sessão do Customer Portal para gerir subscrição"""
     try:
+        if not db:
+            return jsonify({"error": "Database not configured"}), 500
+        
         if not request.is_json:
             return jsonify({"error": "Content-Type must be application/json"}), 400
         
@@ -642,13 +707,31 @@ if __name__ == '__main__':
     port = int(os.getenv("PORT", 5001))
     debug_mode = os.getenv("DEBUG", "true").lower() == "true"
     
-    print("✅ CHECK: Firebase Connection OK")
+    print("=" * 50)
+    print("🚀 Luna Backend - Starting Server")
+    print("=" * 50)
+    
+    # Status das configurações
+    if db:
+        print("✅ Firebase: Connected")
+    else:
+        print("❌ Firebase: NOT CONFIGURED")
+    
+    if client and gemini_api_key:
+        print("✅ Gemini API: Configured")
+    else:
+        print("❌ Gemini API: NOT CONFIGURED")
+    
     print("🔒 Security: CORS restricted, Rate limiting enabled")
     print(f"🌐 Allowed Origins: {', '.join(allowed_origins)}")
     print("📊 Rate Limits: 10 req/min (chat), 30 req/min (history)")
+    
     if stripe.api_key:
         print("💳 Stripe: Payment system enabled")
     else:
         print("⚠️  Stripe: API key not configured (payments disabled)")
+    
     print(f"🚀 Starting server on port {port} (debug={debug_mode})")
+    print("=" * 50)
+    
     app.run(port=port, debug=debug_mode)

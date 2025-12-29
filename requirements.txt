@@ -5,4 +5,5 @@ python-dotenv==1.0.0
 google-genai==1.56.0
 firebase-admin==6.5.0
 stripe==10.1.0
+gunicorn==21.2.0
 

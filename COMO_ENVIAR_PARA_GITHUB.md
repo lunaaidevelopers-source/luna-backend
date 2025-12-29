@@ -98,7 +98,8 @@ Agora que o código está no GitHub:
    - **Root Directory:** (deixar vazio)
    - **Runtime:** `Python 3`
    - **Build Command:** `pip install -r requirements.txt`
-   - **Start Command:** `python3 app.py`
+   - **Start Command:** (deixar vazio - o Render detecta o Procfile automaticamente)
+     - OU usar: `gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120`
 
 4. **Variáveis de Ambiente:**
    - Clicar "Advanced" → "Add Environment Variable"
@@ -184,4 +185,6 @@ Agora que o código está no GitHub:
 - **Nunca commites** ficheiros `.env` ou `luna_config.json` (já estão no .gitignore)
 - **Mantém secrets seguros** - usa variáveis de ambiente nas plataformas
 - **Testa localmente** antes de fazer deploy
+
+
 

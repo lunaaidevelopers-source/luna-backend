@@ -313,7 +313,8 @@ Para começar, usa **Render** no plano gratuito. É suficiente para começar e d
    - **Root Directory:** (deixar vazio)
    - **Runtime:** `Python 3`
    - **Build Command:** `pip install -r requirements.txt`
-   - **Start Command:** `python3 app.py`
+   - **Start Command:** (deixar vazio - o Render detecta o Procfile automaticamente)
+     - OU usar: `gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120`
 
 5. **Variáveis de Ambiente:**
    - `GEMINI_API_KEY` = (sua chave)
@@ -429,4 +430,6 @@ Para começar, usa **Render** no plano gratuito. É suficiente para começar e d
 5. **Testa** - Testa tudo antes de anunciar
 
 **Boa sorte com o deploy! 🚀**
+
+
 
