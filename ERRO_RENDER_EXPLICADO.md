@@ -138,3 +138,4 @@ Com o Gunicorn:
 - ✅ Servidor mais robusto
 - ✅ Melhor para produção
 
+

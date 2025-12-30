@@ -1,4 +1,5 @@
 import os
+import sys
 import flask
 from flask import request, jsonify
 from flask_cors import CORS
@@ -11,6 +12,13 @@ from firebase_admin import credentials, firestore
 import re
 import stripe
 from datetime import datetime, timedelta
+
+# Debug: Mostrar informações de inicialização
+print("=" * 60)
+print("🚀 Luna Backend - Initializing...")
+print(f"Python: {sys.version}")
+print(f"PORT env: {os.getenv('PORT', 'NOT SET')}")
+print("=" * 60)
 
 # Carregar variáveis do ficheiro .env
 load_dotenv()
@@ -61,45 +69,44 @@ else:
 # 2. Configurar Firebase (Usando o teu ficheiro de configuração ou variáveis de ambiente)
 db = None
 if not firebase_admin._apps:
-    # Tentar usar arquivo de configuração primeiro
-    firebase_config_path = os.getenv("FIREBASE_CONFIG_PATH", "luna_config.json")
-    if os.path.exists(firebase_config_path):
+    firebase_initialized = False
+    
+    # Prioridade 1: Tentar usar variáveis de ambiente primeiro (mais seguro para produção)
+    firebase_creds_json = os.getenv("FIREBASE_CREDENTIALS_JSON")
+    if firebase_creds_json:
         try:
-            cred = credentials.Certificate(firebase_config_path)
+            import json
+            cred_dict = json.loads(firebase_creds_json)
+            cred = credentials.Certificate(cred_dict)
             firebase_admin.initialize_app(cred)
             db = firestore.client()
-            print("✅ Firebase initialized from config file")
+            print("✅ Firebase initialized from environment variable")
+            firebase_initialized = True
         except Exception as e:
-            print(f"❌ Error initializing Firebase from file: {e}")
-            # Tentar usar variáveis de ambiente como fallback
-            firebase_creds_json = os.getenv("FIREBASE_CREDENTIALS_JSON")
-            if firebase_creds_json:
-                try:
-                    import json
-                    cred_dict = json.loads(firebase_creds_json)
-                    cred = credentials.Certificate(cred_dict)
-                    firebase_admin.initialize_app(cred)
-                    db = firestore.client()
-                    print("✅ Firebase initialized from environment variable")
-                except Exception as e2:
-                    print(f"❌ Error initializing Firebase from env: {e2}")
-    else:
-        # Tentar usar variáveis de ambiente
-        firebase_creds_json = os.getenv("FIREBASE_CREDENTIALS_JSON")
-        if firebase_creds_json:
+            print(f"❌ Error initializing Firebase from env variable: {e}")
+    
+    # Prioridade 2: Se variável de ambiente não funcionou, tentar arquivo
+    if not firebase_initialized:
+        firebase_config_path = os.getenv("FIREBASE_CONFIG_PATH", "luna_config.json")
+        if os.path.exists(firebase_config_path) and os.path.getsize(firebase_config_path) > 0:
             try:
-                import json
-                cred_dict = json.loads(firebase_creds_json)
-                cred = credentials.Certificate(cred_dict)
+                cred = credentials.Certificate(firebase_config_path)
                 firebase_admin.initialize_app(cred)
                 db = firestore.client()
-                print("✅ Firebase initialized from environment variable")
+                print("✅ Firebase initialized from config file")
+                firebase_initialized = True
             except Exception as e:
-                print(f"❌ Error initializing Firebase from env: {e}")
+                print(f"❌ Error initializing Firebase from file: {e}")
         else:
-            print("⚠️  WARNING: Firebase config file not found and FIREBASE_CREDENTIALS_JSON not set")
+            if firebase_config_path == "luna_config.json":
+                print("⚠️  WARNING: luna_config.json not found")
+    
+    if not firebase_initialized:
+        print("❌ CRITICAL: Firebase could not be initialized!")
+        print("   Configure FIREBASE_CREDENTIALS_JSON environment variable or upload luna_config.json")
 else:
     db = firestore.client()
+    print("✅ Firebase already initialized")
 
 # 3. Configurar Stripe
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
@@ -705,7 +712,8 @@ def health_check():
 if __name__ == '__main__':
     # Porta 5001 para evitar conflito com o AirPlay do Mac
     port = int(os.getenv("PORT", 5001))
-    debug_mode = os.getenv("DEBUG", "true").lower() == "true"
+    # Default DEBUG to false in production unless explicitly enabled in env
+    debug_mode = os.getenv("DEBUG", "false").lower() == "true"
     
     print("=" * 50)
     print("🚀 Luna Backend - Starting Server")
@@ -733,5 +741,6 @@ if __name__ == '__main__':
     
     print(f"🚀 Starting server on port {port} (debug={debug_mode})")
     print("=" * 50)
-    
-    app.run(port=port, debug=debug_mode)
+    # Bind to 0.0.0.0 so hosting providers (Render, etc.) can detect the open port.
+    # When running under a WSGI server like gunicorn this block is not executed.
+    app.run(host="0.0.0.0", port=port, debug=debug_mode)
