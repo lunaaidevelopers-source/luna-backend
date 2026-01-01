@@ -507,8 +507,8 @@ def create_checkout():
                     'quantity': 1,
                 }],
                 mode='subscription',
-                success_url=f"{os.getenv('FRONTEND_URL', 'https://luna-ai-girlfriend.vercel.app/success')}?payment=success&session_id={{CHECKOUT_SESSION_ID}}",
-                cancel_url=f"{os.getenv('FRONTEND_URL', 'http://localhost:3000')}?payment=cancelled",
+                success_url=f"{os.getenv('FRONTEND_URL', 'https://luna-ai-girlfriend.vercel.app')}/selectPersona?payment=success&session_id={{CHECKOUT_SESSION_ID}}",
+                cancel_url=f"{os.getenv('FRONTEND_URL', 'https://luna-ai-girlfriend.vercel.app')}?payment=cancelled",
                 client_reference_id=user_id,
                 metadata={
                     'user_id': user_id,
