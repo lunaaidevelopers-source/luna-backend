@@ -39,9 +39,20 @@ if frontend_urls:
     allowed_origins.extend([url.strip() for url in frontend_urls.split(",") if url.strip()])
 
 def get_frontend_url():
+    # 1. Try explicit FRONTEND_URL env var (singular)
     env_url = os.getenv('FRONTEND_URL')
     if env_url:
         return env_url.rstrip('/')
+    
+    # 2. Try first URL from FRONTEND_URLS env var (plural)
+    frontend_urls_env = os.getenv("FRONTEND_URLS", "")
+    if frontend_urls_env:
+        # Split by comma and take the first one
+        first_url = frontend_urls_env.split(",")[0].strip()
+        if first_url:
+            return first_url.rstrip('/')
+            
+    # 3. Fallback to localhost (only for local dev)
     if allowed_origins and len(allowed_origins) > 0:
         return allowed_origins[0].rstrip('/')
     return "http://localhost:3000"
