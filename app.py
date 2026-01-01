@@ -39,6 +39,21 @@ if frontend_urls:
     allowed_origins.extend([url.strip() for url in frontend_urls.split(",") if url.strip()])
 
 def get_frontend_url():
+    # 0. Best effort: Use the Origin of the request (where the user actually is)
+    try:
+        from flask import request
+        if request:
+            origin = request.headers.get('Origin')
+            if origin:
+                return origin.rstrip('/')
+            referer = request.headers.get('Referer')
+            if referer:
+                 from urllib.parse import urlparse
+                 parsed = urlparse(referer)
+                 return f"{parsed.scheme}://{parsed.netloc}"
+    except Exception as e:
+        print(f"Warning: Could not get request origin: {e}")
+
     # 1. Try explicit FRONTEND_URL env var (singular)
     env_url = os.getenv('FRONTEND_URL')
     if env_url:
