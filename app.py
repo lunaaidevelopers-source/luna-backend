@@ -38,6 +38,14 @@ frontend_urls = os.getenv("FRONTEND_URLS", "")
 if frontend_urls:
     allowed_origins.extend([url.strip() for url in frontend_urls.split(",") if url.strip()])
 
+def get_frontend_url():
+    env_url = os.getenv('FRONTEND_URL')
+    if env_url:
+        return env_url.rstrip('/')
+    if allowed_origins and len(allowed_origins) > 0:
+        return allowed_origins[0].rstrip('/')
+    return "http://localhost:3000"
+
 CORS(app, 
      origins=allowed_origins,
      methods=["GET", "POST", "OPTIONS"],
@@ -466,8 +474,8 @@ def create_checkout():
                     'quantity': 1,
                 }],
                 mode='subscription',
-                success_url=f"{os.getenv('FRONTEND_URL', 'https://luna-ai-girlfriend.vercel.app')}/selectPersona?payment=success&session_id={{CHECKOUT_SESSION_ID}}",
-                cancel_url=f"{os.getenv('FRONTEND_URL', 'https://luna-ai-girlfriend.vercel.app')}?payment=cancelled",
+                success_url=f"{get_frontend_url()}/selectPersona?payment=success&session_id={{CHECKOUT_SESSION_ID}}",
+                cancel_url=f"{get_frontend_url()}?payment=cancelled",
                 client_reference_id=user_id,
                 metadata={
                     'user_id': user_id,
@@ -648,7 +656,7 @@ def create_portal_session():
         try:
             portal_session = stripe.billing_portal.Session.create(
                 customer=customer_id,
-                return_url=f"{os.getenv('FRONTEND_URL', 'https://lunaai-girlfriend.vercel.app')}/selectPersona"
+                return_url=f"{get_frontend_url()}/selectPersona"
             )
             
             return jsonify({
@@ -660,6 +668,41 @@ def create_portal_session():
     
     except Exception as e:
         print(f"❌ Erro ao criar portal session: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/support/report-issue', methods=['POST'])
+@limiter.limit("5 per minute")
+def report_issue():
+    try:
+        if not db:
+            return jsonify({"error": "Database not configured"}), 500
+        if not request.is_json:
+            return jsonify({"error": "Content-Type must be application/json"}), 400
+        data = request.get_json()
+        description = data.get('description', '').strip()
+        user_id = data.get('userId')
+        severity = data.get('severity', 'medium')
+        page = data.get('page', '')
+        email = data.get('email', '')
+        if not description:
+            return jsonify({"error": "Description is required"}), 400
+        if user_id and not validate_user_id(user_id):
+            return jsonify({"error": "Invalid user ID format"}), 400
+        doc_ref = db.collection('reports').document()
+        doc_ref.set({
+            'reportId': doc_ref.id,
+            'userId': user_id or None,
+            'email': email or None,
+            'description': description,
+            'severity': severity,
+            'page': page,
+            'status': 'open',
+            'createdAt': firestore.SERVER_TIMESTAMP,
+            'updatedAt': firestore.SERVER_TIMESTAMP
+        })
+        return jsonify({"ok": True, "reportId": doc_ref.id}), 200
+    except Exception as e:
+        print(f"❌ Erro ao reportar issue: {e}")
         return jsonify({"error": str(e)}), 500
 
 # Health check endpoint (sem rate limiting)
