@@ -49,7 +49,7 @@ Certifique-se de que estas variáveis também estão configuradas:
 
 - ✅ `GEMINI_API_KEY` - Sua chave da API Gemini
 - ✅ `FIREBASE_CREDENTIALS_JSON` - Conteúdo do luna_config.json
-- ✅ `FRONTEND_URLS` - URLs do frontend (ex: `https://luna-ai.vercel.app`)
+- ✅ `FRONTEND_URLS` - URLs do frontend (ex: `https://lunaai-girlfriend.vercel.app`)
 - ⚠️ `STRIPE_SECRET_KEY` - (Opcional, se usar pagamentos)
 - ⚠️ `STRIPE_PUBLISHABLE_KEY` - (Opcional)
 - ⚠️ `STRIPE_WEBHOOK_SECRET` - (Opcional)
