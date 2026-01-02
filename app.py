@@ -453,6 +453,67 @@ def get_chat_history():
         print(f"❌ Erro ao carregar histórico: {e}")
         return jsonify({"error": str(e)}), 500
 
+
+@app.route('/api/v1/chat/history', methods=['DELETE'])
+@limiter.limit("10 per minute")
+def delete_chat_history():
+    """Apagar histórico de conversas (por persona ou tudo)"""
+    try:
+        if not db:
+            return jsonify({"error": "Database not configured"}), 500
+        
+        user_id = request.args.get('userId')
+        persona = request.args.get('persona') # Opcional: se não for passado, apaga tudo
+        
+        if not user_id:
+            return jsonify({"error": "User ID is required"}), 400
+        
+        if not validate_user_id(user_id):
+            return jsonify({"error": "Invalid user ID format"}), 400
+            
+        # Preparar query
+        chats_ref = db.collection('chats')
+        query = chats_ref.where(filter=firestore.FieldFilter('userId', '==', user_id))
+        
+        # Filtrar por persona se fornecida
+        # Nota: Como não temos índice composto, filtramos em memória para apagar
+        # Isto não é o ideal para milhões de registos, mas funciona bem para este MVP
+        
+        batch = db.batch()
+        docs = query.stream()
+        count = 0
+        
+        for doc in docs:
+            # Se persona foi especificada, verificar se corresponde
+            if persona:
+                doc_data = doc.to_dict()
+                if doc_data.get('persona') != persona:
+                    continue
+            
+            # Adicionar ao batch de delete
+            batch.delete(doc.reference)
+            count += 1
+            
+            # Firestore batch limit is 500
+            if count % 400 == 0:
+                batch.commit()
+                batch = db.batch()
+                
+        # Commit final
+        if count > 0:
+            batch.commit()
+            
+        return jsonify({
+            "success": True, 
+            "message": f"Deleted {count} messages",
+            "count": count
+        })
+        
+    except Exception as e:
+        print(f"❌ Erro ao apagar histórico: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
 # ==================== STRIPE PAYMENT ENDPOINTS ====================
 
 @app.route('/api/v1/payment/create-checkout', methods=['POST'])
