@@ -1,6 +1,7 @@
 import os
 import sys
 import flask
+import requests
 from flask import request, jsonify
 from utils import validate_user_id, validate_message, validate_persona, PERSONA_PROMPTS
 from flask_cors import CORS
@@ -787,6 +788,31 @@ def report_issue():
             'createdAt': firestore.SERVER_TIMESTAMP,
             'updatedAt': firestore.SERVER_TIMESTAMP
         })
+        
+        # Enviar notificação para o Telegram
+        telegram_token = os.getenv("TELEGRAM_BOT_TOKEN")
+        telegram_chat_id = os.getenv("TELEGRAM_CHAT_ID")
+        
+        if telegram_token and telegram_chat_id:
+            try:
+                msg_text = f"🚨 *New Report from Luna AI*\n\n" \
+                           f"👤 *User:* `{user_id or 'Anonymous'}`\n" \
+                           f"📧 *Email:* `{email or 'N/A'}`\n" \
+                           f"⚠️ *Severity:* {severity.upper()}\n" \
+                           f"📄 *Page:* `{page}`\n\n" \
+                           f"📝 *Description:*\n{description}"
+                
+                requests.post(
+                    f"https://api.telegram.org/bot{telegram_token}/sendMessage",
+                    json={
+                        "chat_id": telegram_chat_id,
+                        "text": msg_text,
+                        "parse_mode": "Markdown"
+                    },
+                    timeout=5
+                )
+            except Exception as e:
+                print(f"⚠️ Erro ao enviar notificação Telegram: {e}")
         return jsonify({"ok": True, "reportId": doc_ref.id}), 200
     except Exception as e:
         print(f"❌ Erro ao reportar issue: {e}")

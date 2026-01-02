@@ -7,3 +7,4 @@ firebase-admin==6.5.0
 stripe==10.1.0
 gunicorn==21.2.0
 
+requests==2.31.0
