@@ -793,6 +793,8 @@ def report_issue():
         telegram_token = os.getenv("TELEGRAM_BOT_TOKEN")
         telegram_chat_id = os.getenv("TELEGRAM_CHAT_ID")
         
+        
+        print(f"🔍 Checking Telegram config: TOKEN={'Set' if telegram_token else 'Missing'}, ID={'Set' if telegram_chat_id else 'Missing'}")
         if telegram_token and telegram_chat_id:
             print(f"📨 Sending Telegram report to {telegram_chat_id}...")
             try:
