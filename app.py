@@ -75,7 +75,7 @@ def get_frontend_url():
 
 CORS(app, 
      origins=allowed_origins,
-     methods=["GET", "POST", "OPTIONS"],
+     methods=["GET", "POST", "DELETE", "OPTIONS"],
      allow_headers=["Content-Type", "Authorization"],
      supports_credentials=True)
 
@@ -794,6 +794,7 @@ def report_issue():
         telegram_chat_id = os.getenv("TELEGRAM_CHAT_ID")
         
         if telegram_token and telegram_chat_id:
+            print(f"📨 Sending Telegram report to {telegram_chat_id}...")
             try:
                 msg_text = f"🚨 *New Report from Luna AI*\n\n" \
                            f"👤 *User:* `{user_id or 'Anonymous'}`\n" \
@@ -802,7 +803,7 @@ def report_issue():
                            f"📄 *Page:* `{page}`\n\n" \
                            f"📝 *Description:*\n{description}"
                 
-                requests.post(
+                resp = requests.post(
                     f"https://api.telegram.org/bot{telegram_token}/sendMessage",
                     json={
                         "chat_id": telegram_chat_id,
@@ -811,8 +812,11 @@ def report_issue():
                     },
                     timeout=5
                 )
+                print(f"📨 Telegram response: {resp.status_code} - {resp.text}")
             except Exception as e:
                 print(f"⚠️ Erro ao enviar notificação Telegram: {e}")
+        else:
+            print("⚠️ Telegram not configured (TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID missing)")
         return jsonify({"ok": True, "reportId": doc_ref.id}), 200
     except Exception as e:
         print(f"❌ Erro ao reportar issue: {e}")
