@@ -836,6 +836,16 @@ def health_check():
 # ============================================================================
 # DAILY REPORT SCHEDULER
 # ============================================================================
+
+@app.route('/api/v1/admin/trigger-report', methods=['POST'])
+def trigger_report():
+    try:
+        generate_daily_report()
+        return jsonify({"status": "Report triggered manually"}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 def generate_daily_report():
     print("📊 Generating daily report...")
     try:
