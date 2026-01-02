@@ -12,7 +12,9 @@ from dotenv import load_dotenv
 import firebase_admin
 from firebase_admin import credentials, firestore
 import stripe
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from apscheduler.schedulers.background import BackgroundScheduler
+import pytz
 
 # Debug: Mostrar informações de inicialização
 print("=" * 60)
@@ -829,6 +831,103 @@ def report_issue():
 def health_check():
     """Endpoint para verificar se o servidor está online"""
     return jsonify({"status": "ok", "service": "Luna Backend"}), 200
+
+
+# ============================================================================
+# DAILY REPORT SCHEDULER
+# ============================================================================
+def generate_daily_report():
+    print("📊 Generating daily report...")
+    try:
+        # 1. Setup Dates (Yesterday)
+        now = datetime.now(timezone.utc)
+        yesterday = now - timedelta(days=1)
+        start_of_day = yesterday.replace(hour=0, minute=0, second=0, microsecond=0)
+        end_of_day = yesterday.replace(hour=23, minute=59, second=59, microsecond=999999)
+        
+        # 2. Count New Users (Firebase Auth)
+        new_users = 0
+        try:
+            from firebase_admin import auth
+            # Iterate all users (might be slow if millions, but ok for now)
+            for user in auth.list_users().iterate_all():
+                # creation_timestamp is in milliseconds
+                created = datetime.fromtimestamp(user.user_metadata.creation_timestamp / 1000, tz=timezone.utc)
+                if start_of_day <= created <= end_of_day:
+                    new_users += 1
+        except Exception as e:
+            print(f"⚠️ Error counting users: {e}")
+
+        # 3. Count Messages (Firestore)
+        messages_sent = 0
+        try:
+            # Query Firestore
+            # Note: This requires an index on 'timestamp'. If missing, it might fail.
+            # We use a try/except to handle missing index gracefully
+            if db:
+                msgs = db.collection('chats')\
+                    .where(filter=firestore.FieldFilter('timestamp', '>=', start_of_day))\
+                    .where(filter=firestore.FieldFilter('timestamp', '<=', end_of_day))\
+                    .stream()
+                messages_sent = sum(1 for _ in msgs)
+        except Exception as e:
+            print(f"⚠️ Error counting messages: {e}")
+
+        # 4. Count New Subscriptions (Stripe)
+        new_subs = 0
+        try:
+            if stripe.api_key:
+                # Convert to unix timestamp
+                start_ts = int(start_of_day.timestamp())
+                end_ts = int(end_of_day.timestamp())
+                
+                # List new subscriptions created yesterday
+                subs = stripe.Subscription.list(
+                    created={'gte': start_ts, 'lte': end_ts},
+                    limit=100
+                )
+                new_subs = len(subs.data)
+                # If has_more is true, we should fetch more, but for a daily report 100 is likely enough for now
+                if subs.has_more:
+                    new_subs = "100+"
+        except Exception as e:
+            print(f"⚠️ Error counting subscriptions: {e}")
+
+        # 5. Send Telegram Message
+        telegram_token = os.getenv("TELEGRAM_BOT_TOKEN")
+        telegram_chat_id = os.getenv("TELEGRAM_CHAT_ID")
+        
+        if telegram_token and telegram_chat_id:
+            msg = f"Bom dia Matilde! Ontem tivemos {new_users} novos users, {messages_sent} mensagens enviadas e {new_subs} novas subscrições Plus! 💰"
+            
+            requests.post(
+                f"https://api.telegram.org/bot{telegram_token}/sendMessage",
+                json={
+                    "chat_id": telegram_chat_id,
+                    "text": msg
+                },
+                timeout=10
+            )
+            print("✅ Daily report sent!")
+        else:
+            print("⚠️ Telegram not configured for daily report")
+
+    except Exception as e:
+        print(f"❌ Error generating daily report: {e}")
+
+# Start Scheduler
+# Run at 09:00 AM Lisbon time (UTC+0 in winter, UTC+1 summer). 
+# We'll use Europe/Lisbon timezone if possible, or just UTC+0 (09:00 UTC is 09:00 Lisbon winter)
+try:
+    scheduler = BackgroundScheduler()
+    # 09:00 Lisbon time
+    scheduler.add_job(generate_daily_report, 'cron', hour=9, minute=0, timezone=pytz.timezone('Europe/Lisbon'))
+    scheduler.start()
+    print("⏰ Daily report scheduled for 09:00 Europe/Lisbon")
+except Exception as e:
+    print(f"⚠️ Could not start scheduler: {e}")
+
+
 
 if __name__ == '__main__':
     # Porta 5001 para evitar conflito com o AirPlay do Mac
