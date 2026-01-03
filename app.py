@@ -221,6 +221,8 @@ def chat():
     if not validate_persona(persona):
         return jsonify({"error": "Invalid persona"}), 400
     
+    print(f"📥 Chat request: User={user_id}, Persona={persona}, Msg={user_message[:50]}...")
+
     # Verificar se é uma conversa nova (contar mensagens anteriores com esta persona)
     # Filtrar apenas por userId e depois por persona em memória (evita necessidade de índice composto)
     try:
@@ -367,13 +369,20 @@ Luna:"""
             pass
 
         # Guardar no Firestore associado ao utilizador e persona
-        db.collection('chats').add({
-            'userId': user_id,
-            'persona': persona,
-            'message': user_message,
-            'reply': reply_text,
-            'timestamp': firestore.SERVER_TIMESTAMP
-        })
+        print(f"💾 Saving to Firestore: User={user_id}, Persona={persona}")
+        try:
+            doc_ref = db.collection('chats').document()
+            doc_ref.set({
+                'userId': user_id,
+                'persona': persona,
+                'message': user_message,
+                'reply': reply_text,
+                'timestamp': firestore.SERVER_TIMESTAMP
+            })
+            print(f"✅ Chat saved with ID: {doc_ref.id}")
+        except Exception as db_err:
+            print(f"❌ Error saving to Firestore: {db_err}")
+            # We don't raise here to ensure the user still gets the reply
         
         return jsonify({"reply": reply_text})
 
